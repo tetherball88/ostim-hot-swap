@@ -3,9 +3,11 @@
 #include <spdlog/spdlog.h>
 
 #include "PCH.h"
+#include "src/Papyrus/PapyrusActorManagement.h"
 
 using namespace SKSE;
 
+OstimNG_API::Thread::IThreadInterface* g_ostimAPI = nullptr;
 
 namespace {
     void SetupLogging() {
@@ -57,7 +59,7 @@ SKSEPluginLoad(const LoadInterface* skse) {
     SKSE::log::info("OStimHotSwap plugin loading...");
 
     auto papyrus = SKSE::GetPapyrusInterface();
-    if (!papyrus->Register(Papyrus::Register)) {
+    if (!papyrus->Register(HotSwap::Papyrus::ActorManagement::Register)) {
         SKSE::log::critical("Failed to register papyrus callback");
         return false;
     }
@@ -72,11 +74,18 @@ SKSEPluginLoad(const LoadInterface* skse) {
                     case SKSE::MessagingInterface::kPostLoadGame:
                     case SKSE::MessagingInterface::kNewGame:
                         SKSE::log::info("New game/Load...");
-                        
                         break;
 
                     case SKSE::MessagingInterface::kDataLoaded: {
                         SKSE::log::info("Data loaded successfully.");
+                        g_ostimAPI = OstimNG_API::Thread::GetAPI(
+                            "OStimHotSwap",
+                            SKSE::PluginDeclaration::GetSingleton()->GetVersion());
+                        if (g_ostimAPI) {
+                            SKSE::log::info("OStim API connected successfully");
+                        } else {
+                            SKSE::log::error("Failed to connect to OStim API - actor management unavailable");
+                        }
                         break;
                     }
 
