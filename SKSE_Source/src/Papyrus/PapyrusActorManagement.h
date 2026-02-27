@@ -28,8 +28,8 @@ namespace HotSwap::Papyrus::ActorManagement {
             g_ostimAPI);
     }
 
-    bool SwapActors(RE::StaticFunctionTag*, int threadID, int posA, int posB) {
-        if (!g_ostimAPI) return false;
+    int SwapActors(RE::StaticFunctionTag*, int threadID, int posA, int posB) {
+        if (!g_ostimAPI) return -1;
         return HotSwap::ActorManagement::swapActors(
             static_cast<uint32_t>(threadID),
             static_cast<uint32_t>(posA),
@@ -49,8 +49,8 @@ namespace HotSwap::Papyrus::ActorManagement {
             HotSwap::ActorManagement::swapActorsWithUI(static_cast<uint32_t>(threadID), g_ostimAPI);
     }
 
-    bool AddActorToThread(RE::StaticFunctionTag*, int threadID, RE::Actor* actor) {
-        if (!g_ostimAPI) return false;
+    int AddActorToThread(RE::StaticFunctionTag*, int threadID, RE::Actor* actor) {
+        if (!g_ostimAPI) return -1;
         return HotSwap::ActorManagement::addActorToThread(
             static_cast<uint32_t>(threadID), actor, g_ostimAPI);
     }
@@ -60,8 +60,8 @@ namespace HotSwap::Papyrus::ActorManagement {
             HotSwap::ActorManagement::addActorWithUI(static_cast<uint32_t>(threadID), g_ostimAPI);
     }
 
-    bool RemoveActorFromThread(RE::StaticFunctionTag*, int threadID, int position) {
-        if (!g_ostimAPI) return false;
+    int RemoveActorFromThread(RE::StaticFunctionTag*, int threadID, int position) {
+        if (!g_ostimAPI) return -1;
         return HotSwap::ActorManagement::removeActorFromThread(
             static_cast<uint32_t>(threadID),
             static_cast<uint32_t>(position),

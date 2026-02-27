@@ -4,6 +4,7 @@
 
 #include "PCH.h"
 #include "src/Papyrus/PapyrusActorManagement.h"
+#include "src/Settings.h"
 
 using namespace SKSE;
 
@@ -57,6 +58,7 @@ SKSEPluginLoad(const LoadInterface* skse) {
 
     SetupLogging();
     SKSE::log::info("OStimHotSwap plugin loading...");
+    HotSwap::Settings::GetSingleton()->Load();
 
     auto papyrus = SKSE::GetPapyrusInterface();
     if (!papyrus->Register(HotSwap::Papyrus::ActorManagement::Register)) {

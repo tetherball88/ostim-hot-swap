@@ -13,14 +13,14 @@ bool Function CanSwapActors(int threadID, int posA, int posB) native global
 
 ; -- Actions --
 
-; Adds the actor to the thread. Returns true on success.
-bool Function AddActorToThread(int threadID, Actor actor) native global
+; Adds the actor to the thread. Returns the new thread ID on success, or -1 on failure.
+int Function AddActorToThread(int threadID, Actor actor) native global
 
-; Removes the actor at the given position from the thread. Returns true on success.
-bool Function RemoveActorFromThread(int threadID, int position) native global
+; Removes the actor at the given position from the thread. Returns the new thread ID on success, or -1 on failure.
+int Function RemoveActorFromThread(int threadID, int position) native global
 
-; Swaps the actors at posA and posB in the thread. Returns true on success.
-bool Function SwapActors(int threadID, int posA, int posB) native global
+; Swaps the actors at posA and posB in the thread. Returns the new thread ID on success, or -1 on failure.
+int Function SwapActors(int threadID, int posA, int posB) native global
 
 ; Returns positions of all valid swap partners for the given actor in the thread.
 int[] Function GetSwapPartners(int threadID, Actor actor) native global

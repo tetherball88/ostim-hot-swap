@@ -1,5 +1,7 @@
 #include "ActorManagement.h"
+#include "Settings.h"
 #include "Utils/MessageBox.h"
+#include <SKSE/SKSE.h>
 
 namespace {
     void SendNotification(const char* text) {
@@ -39,8 +41,12 @@ namespace HotSwap::ActorManagement {
         return api->HasCompatibleNode(threadID, ids, count + 1);
     }
 
-    bool addActorToThread(uint32_t threadID, RE::Actor* actor, API* api) {
-        if (!canAddActor(threadID, actor, api)) return false;
+    int32_t addActorToThread(uint32_t threadID, RE::Actor* actor, API* api,
+                             void (*onComplete)(int32_t, void*), void* context) {
+        if (!canAddActor(threadID, actor, api)) {
+            if (onComplete) onComplete(-1, context);
+            return -1;
+        }
 
         OstimNG_API::Thread::ActorData buf[32];
         uint32_t count = api->GetActors(threadID, buf, 32);
@@ -49,7 +55,7 @@ namespace HotSwap::ActorManagement {
         for (uint32_t i = 0; i < count; i++) ids[i] = buf[i].formID;
         ids[count] = actor->GetFormID();
 
-        return api->MigrateThread(threadID, ids, count + 1);
+        return api->MigrateThread(threadID, ids, count + 1, onComplete, context, HotSwap::Settings::GetSingleton()->GetMigrationDelayMs());
     }
 
     bool canRemoveActor(uint32_t threadID, uint32_t position, API* api) {
@@ -66,8 +72,12 @@ namespace HotSwap::ActorManagement {
         return api->HasCompatibleNode(threadID, ids, newCount);
     }
 
-    bool removeActorFromThread(uint32_t threadID, uint32_t position, API* api) {
-        if (!canRemoveActor(threadID, position, api)) return false;
+    int32_t removeActorFromThread(uint32_t threadID, uint32_t position, API* api,
+                                  void (*onComplete)(int32_t, void*), void* context) {
+        if (!canRemoveActor(threadID, position, api)) {
+            if (onComplete) onComplete(-1, context);
+            return -1;
+        }
 
         OstimNG_API::Thread::ActorData buf[32];
         uint32_t count = api->GetActors(threadID, buf, 32);
@@ -77,7 +87,7 @@ namespace HotSwap::ActorManagement {
         for (uint32_t i = 0; i < count; i++)
             if (i != position) ids[newCount++] = buf[i].formID;
 
-        return api->MigrateThread(threadID, ids, newCount);
+        return api->MigrateThread(threadID, ids, newCount, onComplete, context, HotSwap::Settings::GetSingleton()->GetMigrationDelayMs());
     }
 
     bool canSwapActors(uint32_t threadID, uint32_t posA, uint32_t posB, API* api) {
@@ -124,8 +134,12 @@ namespace HotSwap::ActorManagement {
         return partners;
     }
 
-    bool swapActors(uint32_t threadID, uint32_t posA, uint32_t posB, API* api) {
-        if (!canSwapActors(threadID, posA, posB, api)) return false;
+    int32_t swapActors(uint32_t threadID, uint32_t posA, uint32_t posB, API* api,
+                       void (*onComplete)(int32_t, void*), void* context) {
+        if (!canSwapActors(threadID, posA, posB, api)) {
+            if (onComplete) onComplete(-1, context);
+            return -1;
+        }
 
         OstimNG_API::Thread::ActorData buf[32];
         uint32_t count = api->GetActors(threadID, buf, 32);
@@ -134,7 +148,7 @@ namespace HotSwap::ActorManagement {
         for (uint32_t i = 0; i < count; i++) ids[i] = buf[i].formID;
         std::swap(ids[posA], ids[posB]);
 
-        return api->MigrateThread(threadID, ids, count);
+        return api->MigrateThread(threadID, ids, count, onComplete, context, HotSwap::Settings::GetSingleton()->GetMigrationDelayMs());
     }
 
 
@@ -162,10 +176,11 @@ namespace HotSwap::ActorManagement {
         HotSwap::Utils::ShowMessageBox("Select actor to add", names,
             [threadID, candidates, api](uint32_t idx) {
                 if (idx >= candidates.size()) return;
-                if (addActorToThread(threadID, candidates[idx], api))
-                    SendNotification("Actor added");
-                else
-                    SendNotification("Failed to add actor");
+                addActorToThread(threadID, candidates[idx], api, [](int32_t newID, void*) {
+                    SKSE::GetTaskInterface()->AddTask([newID]() {
+                        SendNotification(newID >= 0 ? "Actor added" : "Failed to add actor");
+                    });
+                });
             });
     }
 
@@ -192,10 +207,11 @@ namespace HotSwap::ActorManagement {
         HotSwap::Utils::ShowMessageBox("Select actor to remove", names,
             [threadID, positions, api](uint32_t idx) {
                 if (idx >= positions.size()) return;
-                if (removeActorFromThread(threadID, positions[idx], api))
-                    SendNotification("Actor removed");
-                else
-                    SendNotification("Failed to remove actor");
+                removeActorFromThread(threadID, positions[idx], api, [](int32_t newID, void*) {
+                    SKSE::GetTaskInterface()->AddTask([newID]() {
+                        SendNotification(newID >= 0 ? "Actor removed" : "Failed to remove actor");
+                    });
+                });
             });
     }
 
@@ -233,10 +249,11 @@ namespace HotSwap::ActorManagement {
                 HotSwap::Utils::ShowMessageBox("Swap: select second actor", partnerNames,
                     [threadID, posA, partnerPositions, api](uint32_t idx) {
                         if (idx >= partnerPositions.size()) return;
-                        if (swapActors(threadID, posA, partnerPositions[idx], api))
-                            SendNotification("Actors swapped");
-                        else
-                            SendNotification("Failed to swap actors");
+                        swapActors(threadID, posA, partnerPositions[idx], api, [](int32_t newID, void*) {
+                            SKSE::GetTaskInterface()->AddTask([newID]() {
+                                SendNotification(newID >= 0 ? "Actors swapped" : "Failed to swap actors");
+                            });
+                        });
                     });
             });
     }
