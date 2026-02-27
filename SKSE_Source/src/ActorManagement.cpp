@@ -87,7 +87,19 @@ namespace HotSwap::ActorManagement {
         uint32_t count = api->GetActors(threadID, buf, 32);
         if (posA >= count || posB >= count) return false;
 
+        // Don't allow swapping with self
+        if (posA == posB) {
+            SKSE::log::warn("Cannot swap actors: same position");
+            return false;
+        }
+
         if (api->IsUnrestrictedNavigation()) return true;
+
+        // HasCompatibleNode sorts actors internally, so passing swapped IDs would just
+        // produce the same sorted order — it can't validate position-specific sex roles.
+        // Check intendedSexOnly explicitly: actors must share the same sex to swap roles.
+        if (api->IsIntendedSexOnly() && buf[posA].isFemale != buf[posB].isFemale)
+            return false;
 
         uint32_t ids[32];
         for (uint32_t i = 0; i < count; i++) ids[i] = buf[i].formID;
@@ -167,7 +179,7 @@ namespace HotSwap::ActorManagement {
             if (canRemoveActor(threadID, i, api)) {
                 auto* actor = RE::TESForm::LookupByID<RE::Actor>(buf[i].formID);
                 std::string name = actor ? actor->GetName() : "Unknown";
-                names.push_back(name + " (pos " + std::to_string(i) + ")");
+                names.push_back(name);
                 positions.push_back(i);
             }
         }
