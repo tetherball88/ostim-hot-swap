@@ -25,6 +25,9 @@ int Function SwapActors(int threadID, int posA, int posB) native global
 ; Returns positions of all valid swap partners for the given actor in the thread.
 int[] Function GetSwapPartners(int threadID, Actor actor) native global
 
+; Replaces the thread's actor set with the given ordered array. Returns the new thread ID on success, or -1 on failure.
+int Function MigrateThread(int threadID, Actor[] actors) native global
+
 ; -- UI flows --
 
 ; Opens a message box to select an actor nearby to add to the thread.

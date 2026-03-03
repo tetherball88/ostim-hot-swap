@@ -1,18 +1,20 @@
 #pragma once
 #include "ActorManagement.h"
+#include "Settings.h"
+#include <SKSE/SKSE.h>
 
 extern OstimNG_API::Thread::IThreadInterface* g_ostimAPI;
 
 namespace HotSwap::Papyrus::ActorManagement {
 
     bool CanAddActor(RE::StaticFunctionTag*, int threadID, RE::Actor* actor) {
-        if (!g_ostimAPI) return false;
+        if (!g_ostimAPI) { SKSE::log::error("CanAddActor: OStim API not available"); return false; }
         return HotSwap::ActorManagement::canAddActor(
             static_cast<uint32_t>(threadID), actor, g_ostimAPI);
     }
 
     bool CanRemoveActor(RE::StaticFunctionTag*, int threadID, int position) {
-        if (!g_ostimAPI) return false;
+        if (!g_ostimAPI) { SKSE::log::error("CanRemoveActor: OStim API not available"); return false; }
         return HotSwap::ActorManagement::canRemoveActor(
             static_cast<uint32_t>(threadID),
             static_cast<uint32_t>(position),
@@ -20,7 +22,7 @@ namespace HotSwap::Papyrus::ActorManagement {
     }
 
     bool CanSwapActors(RE::StaticFunctionTag*, int threadID, int posA, int posB) {
-        if (!g_ostimAPI) return false;
+        if (!g_ostimAPI) { SKSE::log::error("CanSwapActors: OStim API not available"); return false; }
         return HotSwap::ActorManagement::canSwapActors(
             static_cast<uint32_t>(threadID),
             static_cast<uint32_t>(posA),
@@ -29,48 +31,80 @@ namespace HotSwap::Papyrus::ActorManagement {
     }
 
     int SwapActors(RE::StaticFunctionTag*, int threadID, int posA, int posB) {
-        if (!g_ostimAPI) return -1;
-        return HotSwap::ActorManagement::swapActors(
+        if (!g_ostimAPI) { SKSE::log::error("SwapActors: OStim API not available"); return -1; }
+        SKSE::log::debug("SwapActors: threadID={} posA={} posB={}", threadID, posA, posB);
+        int result = HotSwap::ActorManagement::swapActors(
             static_cast<uint32_t>(threadID),
             static_cast<uint32_t>(posA),
             static_cast<uint32_t>(posB),
             g_ostimAPI);
+        SKSE::log::debug("SwapActors: returned {}", result);
+        return result;
     }
 
     std::vector<int> GetSwapPartners(RE::StaticFunctionTag*, int threadID, RE::Actor* actor) {
-        if (!g_ostimAPI) return {};
+        if (!g_ostimAPI) { SKSE::log::error("GetSwapPartners: OStim API not available"); return {}; }
         auto v = HotSwap::ActorManagement::getSwapPartners(
             static_cast<uint32_t>(threadID), actor, g_ostimAPI);
         return std::vector<int>(v.begin(), v.end());
     }
 
     void SwapActorsWithUI(RE::StaticFunctionTag*, int threadID) {
-        if (g_ostimAPI)
-            HotSwap::ActorManagement::swapActorsWithUI(static_cast<uint32_t>(threadID), g_ostimAPI);
+        if (!g_ostimAPI) { SKSE::log::error("SwapActorsWithUI: OStim API not available"); return; }
+        HotSwap::ActorManagement::swapActorsWithUI(static_cast<uint32_t>(threadID), g_ostimAPI);
     }
 
     int AddActorToThread(RE::StaticFunctionTag*, int threadID, RE::Actor* actor) {
-        if (!g_ostimAPI) return -1;
-        return HotSwap::ActorManagement::addActorToThread(
+        if (!g_ostimAPI) { SKSE::log::error("AddActorToThread: OStim API not available"); return -1; }
+        SKSE::log::debug("AddActorToThread: threadID={} actor={:X}", threadID, actor ? actor->GetFormID() : 0);
+        int result = HotSwap::ActorManagement::addActorToThread(
             static_cast<uint32_t>(threadID), actor, g_ostimAPI);
+        SKSE::log::debug("AddActorToThread: returned {}", result);
+        return result;
     }
 
     void AddActorWithUI(RE::StaticFunctionTag*, int threadID) {
-        if (g_ostimAPI)
-            HotSwap::ActorManagement::addActorWithUI(static_cast<uint32_t>(threadID), g_ostimAPI);
+        if (!g_ostimAPI) { SKSE::log::error("AddActorWithUI: OStim API not available"); return; }
+        HotSwap::ActorManagement::addActorWithUI(static_cast<uint32_t>(threadID), g_ostimAPI);
     }
 
     int RemoveActorFromThread(RE::StaticFunctionTag*, int threadID, int position) {
-        if (!g_ostimAPI) return -1;
-        return HotSwap::ActorManagement::removeActorFromThread(
+        if (!g_ostimAPI) { SKSE::log::error("RemoveActorFromThread: OStim API not available"); return -1; }
+        SKSE::log::debug("RemoveActorFromThread: threadID={} position={}", threadID, position);
+        int result = HotSwap::ActorManagement::removeActorFromThread(
             static_cast<uint32_t>(threadID),
             static_cast<uint32_t>(position),
             g_ostimAPI);
+        SKSE::log::debug("RemoveActorFromThread: returned {}", result);
+        return result;
     }
 
     void RemoveActorWithUI(RE::StaticFunctionTag*, int threadID) {
-        if (g_ostimAPI)
-            HotSwap::ActorManagement::removeActorWithUI(static_cast<uint32_t>(threadID), g_ostimAPI);
+        if (!g_ostimAPI) { SKSE::log::error("RemoveActorWithUI: OStim API not available"); return; }
+        HotSwap::ActorManagement::removeActorWithUI(static_cast<uint32_t>(threadID), g_ostimAPI);
+    }
+
+    // Replace the thread's actor set with the given ordered actor array.
+    // Blocks until migration completes; returns new thread ID or -1 on failure.
+    int MigrateThread(RE::StaticFunctionTag*, int threadID, std::vector<RE::Actor*> actors) {
+        if (!g_ostimAPI || actors.empty()) {
+            SKSE::log::error("MigrateThread: OStim API not available or empty actor list");
+            return -1;
+        }
+        SKSE::log::debug("MigrateThread: threadID={} actorCount={}", threadID, actors.size());
+        uint32_t ids[32];
+        uint32_t count = 0;
+        for (auto* actor : actors) {
+            if (!actor || count >= 32) {
+                SKSE::log::warn("MigrateThread: null actor or actor limit reached at index {}", count);
+                return -1;
+            }
+            ids[count++] = actor->GetFormID();
+        }
+        int startDelayMs = HotSwap::Settings::GetSingleton()->GetMigrationDelayMs();
+        int result = g_ostimAPI->MigrateThread(static_cast<uint32_t>(threadID), ids, count, nullptr, nullptr, startDelayMs);
+        SKSE::log::debug("MigrateThread: returned {}", result);
+        return result;
     }
 
     bool Register(RE::BSScript::IVirtualMachine* vm) {
@@ -84,6 +118,7 @@ namespace HotSwap::Papyrus::ActorManagement {
         vm->RegisterFunction("AddActorWithUI",        "OStimHotSwap", AddActorWithUI);
         vm->RegisterFunction("RemoveActorFromThread", "OStimHotSwap", RemoveActorFromThread);
         vm->RegisterFunction("RemoveActorWithUI",     "OStimHotSwap", RemoveActorWithUI);
+        vm->RegisterFunction("MigrateThread",         "OStimHotSwap", MigrateThread);
         return true;
     }
 }

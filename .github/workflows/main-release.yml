@@ -26,6 +26,7 @@ jobs:
           TAG="${{ github.ref_name }}"
           # quote paths in case
           zip -r "out/OStimHotSwap_${TAG}.zip" \
+            Scripts/ \
             SKSE/ \
             -x ".github/*"
 

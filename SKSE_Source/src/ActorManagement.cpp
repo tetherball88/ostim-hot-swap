@@ -21,14 +21,24 @@ namespace HotSwap::ActorManagement {
     // ---- Validation ----
 
     bool canAddActor(uint32_t threadID, RE::Actor* actor, API* api) {
-        if (!actor) return false;
+        if (!actor) {
+            SKSE::log::warn("canAddActor: null actor");
+            return false;
+        }
         uint32_t formID = actor->GetFormID();
+        SKSE::log::trace("canAddActor: threadID={} actor={:X}", threadID, formID);
 
         // Already in THIS thread?
-        if (api->GetActorPosition(threadID, formID) != -1) return false;
+        if (api->GetActorPosition(threadID, formID) != -1) {
+            SKSE::log::debug("canAddActor: actor {:X} already in thread {}", formID, threadID);
+            return false;
+        }
 
         // Locked in another thread?
-        if (api->IsActorInAnyThread(formID)) return false;
+        if (api->IsActorInAnyThread(formID)) {
+            SKSE::log::debug("canAddActor: actor {:X} is locked in another thread", formID, threadID);
+            return false;
+        }
 
         // Would a compatible scene exist for the new actor set?
         OstimNG_API::Thread::ActorData buf[32];
@@ -38,12 +48,17 @@ namespace HotSwap::ActorManagement {
         for (uint32_t i = 0; i < count; i++) ids[i] = buf[i].formID;
         ids[count] = formID;
 
-        return api->HasCompatibleNode(threadID, ids, count + 1);
+        bool compatible = api->HasCompatibleNode(threadID, ids, count + 1);
+        SKSE::log::debug("canAddActor: HasCompatibleNode={} for actor {:X} in thread {}", compatible, formID, threadID);
+        return compatible;
     }
 
     int32_t addActorToThread(uint32_t threadID, RE::Actor* actor, API* api,
                              void (*onComplete)(int32_t, void*), void* context) {
+        SKSE::log::debug("addActorToThread: threadID={} actor={:X}", threadID, actor ? actor->GetFormID() : 0);
         if (!canAddActor(threadID, actor, api)) {
+            SKSE::log::warn("addActorToThread: validation failed for actor {:X} in thread {}",
+                actor ? actor->GetFormID() : 0, threadID);
             if (onComplete) onComplete(-1, context);
             return -1;
         }
@@ -55,26 +70,36 @@ namespace HotSwap::ActorManagement {
         for (uint32_t i = 0; i < count; i++) ids[i] = buf[i].formID;
         ids[count] = actor->GetFormID();
 
-        return api->MigrateThread(threadID, ids, count + 1, onComplete, context, HotSwap::Settings::GetSingleton()->GetMigrationDelayMs());
+        int32_t result = api->MigrateThread(threadID, ids, count + 1, onComplete, context, HotSwap::Settings::GetSingleton()->GetMigrationDelayMs());
+        SKSE::log::debug("addActorToThread: MigrateThread returned {}", result);
+        return result;
     }
 
     bool canRemoveActor(uint32_t threadID, uint32_t position, API* api) {
+        SKSE::log::trace("canRemoveActor: threadID={} position={}", threadID, position);
         OstimNG_API::Thread::ActorData buf[32];
         uint32_t count = api->GetActors(threadID, buf, 32);
 
-        if (position >= count || count <= 1) return false;
+        if (position >= count || count <= 1) {
+            SKSE::log::debug("canRemoveActor: invalid — position={} count={}", position, count);
+            return false;
+        }
 
         uint32_t ids[32];
         uint32_t newCount = 0;
         for (uint32_t i = 0; i < count; i++)
             if (i != position) ids[newCount++] = buf[i].formID;
 
-        return api->HasCompatibleNode(threadID, ids, newCount);
+        bool compatible = api->HasCompatibleNode(threadID, ids, newCount);
+        SKSE::log::debug("canRemoveActor: HasCompatibleNode={} for position {} in thread {}", compatible, position, threadID);
+        return compatible;
     }
 
     int32_t removeActorFromThread(uint32_t threadID, uint32_t position, API* api,
                                   void (*onComplete)(int32_t, void*), void* context) {
+        SKSE::log::debug("removeActorFromThread: threadID={} position={}", threadID, position);
         if (!canRemoveActor(threadID, position, api)) {
+            SKSE::log::warn("removeActorFromThread: validation failed for position {} in thread {}", position, threadID);
             if (onComplete) onComplete(-1, context);
             return -1;
         }
@@ -87,41 +112,55 @@ namespace HotSwap::ActorManagement {
         for (uint32_t i = 0; i < count; i++)
             if (i != position) ids[newCount++] = buf[i].formID;
 
-        return api->MigrateThread(threadID, ids, newCount, onComplete, context, HotSwap::Settings::GetSingleton()->GetMigrationDelayMs());
+        int32_t result = api->MigrateThread(threadID, ids, newCount, onComplete, context, HotSwap::Settings::GetSingleton()->GetMigrationDelayMs());
+        SKSE::log::debug("removeActorFromThread: MigrateThread returned {}", result);
+        return result;
     }
 
     bool canSwapActors(uint32_t threadID, uint32_t posA, uint32_t posB, API* api) {
-        if (posA == posB) return false;
-
-        OstimNG_API::Thread::ActorData buf[32];
-        uint32_t count = api->GetActors(threadID, buf, 32);
-        if (posA >= count || posB >= count) return false;
-
-        // Don't allow swapping with self
+        SKSE::log::trace("canSwapActors: threadID={} posA={} posB={}", threadID, posA, posB);
         if (posA == posB) {
-            SKSE::log::warn("Cannot swap actors: same position");
+            SKSE::log::warn("canSwapActors: same position {}", posA);
             return false;
         }
 
-        if (api->IsUnrestrictedNavigation()) return true;
+        OstimNG_API::Thread::ActorData buf[32];
+        uint32_t count = api->GetActors(threadID, buf, 32);
+        if (posA >= count || posB >= count) {
+            SKSE::log::warn("canSwapActors: position out of range — posA={} posB={} count={}", posA, posB, count);
+            return false;
+        }
+
+        if (api->IsUnrestrictedNavigation()) {
+            SKSE::log::trace("canSwapActors: unrestricted navigation, swap allowed");
+            return true;
+        }
 
         // HasCompatibleNode sorts actors internally, so passing swapped IDs would just
         // produce the same sorted order — it can't validate position-specific sex roles.
         // Check intendedSexOnly explicitly: actors must share the same sex to swap roles.
-        if (api->IsIntendedSexOnly() && buf[posA].isFemale != buf[posB].isFemale)
+        if (api->IsIntendedSexOnly() && buf[posA].isFemale != buf[posB].isFemale) {
+            SKSE::log::debug("canSwapActors: sex restriction prevents swap — posA={} posB={}", posA, posB);
             return false;
+        }
 
         uint32_t ids[32];
         for (uint32_t i = 0; i < count; i++) ids[i] = buf[i].formID;
         std::swap(ids[posA], ids[posB]);
 
-        return api->HasCompatibleNode(threadID, ids, count);
+        bool compatible = api->HasCompatibleNode(threadID, ids, count);
+        SKSE::log::debug("canSwapActors: HasCompatibleNode={}", compatible);
+        return compatible;
     }
 
     std::vector<uint32_t> getSwapPartners(uint32_t threadID, RE::Actor* actor, API* api) {
+        SKSE::log::trace("getSwapPartners: threadID={} actor={:X}", threadID, actor ? actor->GetFormID() : 0);
         if (!actor) return {};
         int32_t pos = api->GetActorPosition(threadID, actor->GetFormID());
-        if (pos == -1) return {};
+        if (pos == -1) {
+            SKSE::log::warn("getSwapPartners: actor {:X} not found in thread {}", actor->GetFormID(), threadID);
+            return {};
+        }
 
         OstimNG_API::Thread::ActorData buf[32];
         uint32_t count = api->GetActors(threadID, buf, 32);
@@ -131,12 +170,15 @@ namespace HotSwap::ActorManagement {
             if (i != static_cast<uint32_t>(pos) && canSwapActors(threadID, static_cast<uint32_t>(pos), i, api))
                 partners.push_back(i);
         }
+        SKSE::log::debug("getSwapPartners: found {} partner(s) for actor {:X}", partners.size(), actor->GetFormID());
         return partners;
     }
 
     int32_t swapActors(uint32_t threadID, uint32_t posA, uint32_t posB, API* api,
                        void (*onComplete)(int32_t, void*), void* context) {
+        SKSE::log::debug("swapActors: threadID={} posA={} posB={}", threadID, posA, posB);
         if (!canSwapActors(threadID, posA, posB, api)) {
+            SKSE::log::warn("swapActors: validation failed for posA={} posB={} in thread {}", posA, posB, threadID);
             if (onComplete) onComplete(-1, context);
             return -1;
         }
@@ -148,13 +190,16 @@ namespace HotSwap::ActorManagement {
         for (uint32_t i = 0; i < count; i++) ids[i] = buf[i].formID;
         std::swap(ids[posA], ids[posB]);
 
-        return api->MigrateThread(threadID, ids, count, onComplete, context, HotSwap::Settings::GetSingleton()->GetMigrationDelayMs());
+        int32_t result = api->MigrateThread(threadID, ids, count, onComplete, context, HotSwap::Settings::GetSingleton()->GetMigrationDelayMs());
+        SKSE::log::debug("swapActors: MigrateThread returned {}", result);
+        return result;
     }
 
 
     // ---- UI flows (CommonLibSSE message boxes) ----
 
     void addActorWithUI(uint32_t threadID, API* api) {
+        SKSE::log::debug("addActorWithUI: threadID={}", threadID);
         auto* player = RE::PlayerCharacter::GetSingleton();
         if (!player) return;
 
@@ -165,6 +210,7 @@ namespace HotSwap::ActorManagement {
             return RE::BSContainer::ForEachResult::kContinue;
         });
 
+        SKSE::log::debug("addActorWithUI: {} candidate(s) found", candidates.size());
         if (candidates.empty()) {
             SendNotification("No valid actors nearby to add");
             return;
@@ -176,8 +222,10 @@ namespace HotSwap::ActorManagement {
         HotSwap::Utils::ShowMessageBox("Select actor to add", names,
             [threadID, candidates, api](uint32_t idx) {
                 if (idx >= candidates.size()) return;
+                SKSE::log::debug("addActorWithUI: selected idx={} actor={:X}", idx, candidates[idx]->GetFormID());
                 addActorToThread(threadID, candidates[idx], api, [](int32_t newID, void*) {
                     SKSE::GetTaskInterface()->AddTask([newID]() {
+                        SKSE::log::debug("addActorWithUI: migration complete, newThreadID={}", newID);
                         SendNotification(newID >= 0 ? "Actor added" : "Failed to add actor");
                     });
                 });
@@ -185,6 +233,7 @@ namespace HotSwap::ActorManagement {
     }
 
     void removeActorWithUI(uint32_t threadID, API* api) {
+        SKSE::log::debug("removeActorWithUI: threadID={}", threadID);
         OstimNG_API::Thread::ActorData buf[32];
         uint32_t count = api->GetActors(threadID, buf, 32);
 
@@ -199,6 +248,7 @@ namespace HotSwap::ActorManagement {
             }
         }
 
+        SKSE::log::debug("removeActorWithUI: {} removable actor(s)", positions.size());
         if (positions.empty()) {
             SendNotification("No actors can be removed");
             return;
@@ -207,8 +257,10 @@ namespace HotSwap::ActorManagement {
         HotSwap::Utils::ShowMessageBox("Select actor to remove", names,
             [threadID, positions, api](uint32_t idx) {
                 if (idx >= positions.size()) return;
+                SKSE::log::debug("removeActorWithUI: selected idx={} position={}", idx, positions[idx]);
                 removeActorFromThread(threadID, positions[idx], api, [](int32_t newID, void*) {
                     SKSE::GetTaskInterface()->AddTask([newID]() {
+                        SKSE::log::debug("removeActorWithUI: migration complete, newThreadID={}", newID);
                         SendNotification(newID >= 0 ? "Actor removed" : "Failed to remove actor");
                     });
                 });
@@ -218,6 +270,7 @@ namespace HotSwap::ActorManagement {
     void swapActorsWithUI(uint32_t threadID, API* api) {
         OstimNG_API::Thread::ActorData buf[32];
         uint32_t count = api->GetActors(threadID, buf, 32);
+        SKSE::log::debug("swapActorsWithUI: threadID={} actorCount={}", threadID, count);
         if (count < 2) { SendNotification("Not enough actors to swap"); return; }
 
         std::vector<std::string> names;
@@ -230,6 +283,7 @@ namespace HotSwap::ActorManagement {
         HotSwap::Utils::ShowMessageBox("Swap: select first actor", names,
             [threadID, buf, count, api](uint32_t posA) {
                 if (posA >= count) return;
+                SKSE::log::debug("swapActorsWithUI: selected posA={}", posA);
 
                 std::vector<std::string> partnerNames;
                 std::vector<uint32_t> partnerPositions;
@@ -241,6 +295,7 @@ namespace HotSwap::ActorManagement {
                     }
                 }
 
+                SKSE::log::debug("swapActorsWithUI: {} valid partner(s) for posA={}", partnerPositions.size(), posA);
                 if (partnerPositions.empty()) {
                     SendNotification("No valid swap partners");
                     return;
@@ -249,8 +304,10 @@ namespace HotSwap::ActorManagement {
                 HotSwap::Utils::ShowMessageBox("Swap: select second actor", partnerNames,
                     [threadID, posA, partnerPositions, api](uint32_t idx) {
                         if (idx >= partnerPositions.size()) return;
+                        SKSE::log::debug("swapActorsWithUI: selected posB={}", partnerPositions[idx]);
                         swapActors(threadID, posA, partnerPositions[idx], api, [](int32_t newID, void*) {
                             SKSE::GetTaskInterface()->AddTask([newID]() {
+                                SKSE::log::debug("swapActorsWithUI: migration complete, newThreadID={}", newID);
                                 SendNotification(newID >= 0 ? "Actors swapped" : "Failed to swap actors");
                             });
                         });
