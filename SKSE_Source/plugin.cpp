@@ -38,7 +38,7 @@ namespace {
         auto sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(logPath.string(), true);
         auto logger = std::make_shared<spdlog::logger>("OStimHotSwap", std::move(sink));
         logger->set_level(spdlog::level::trace);
-        logger->flush_on(spdlog::level::info);
+        logger->flush_on(spdlog::level::trace);
         logger->set_pattern("[%H:%M:%S] [%l] %v");
 
         spdlog::set_default_logger(std::move(logger));
