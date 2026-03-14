@@ -15,13 +15,27 @@ An OStim NG plugin that lets you add, remove, and swap actors in an ongoing scen
 
 Start an OStim scene, then open the **OStim options menu**. You will see a **Manage Actors** submenu with three options:
 
-| Option | What it does |
-|--------|--------------|
-| **Add Actor** | Pick a nearby actor to join the scene |
-| **Remove Actor** | Pick an actor in the scene to leave |
-| **Swap Actors** | Pick two actors in the scene to switch positions |
+### Add Actor
 
-The scene restarts seamlessly with the updated actor lineup. No save/reload needed.
+Pick a nearby actor to join the scene(click for preview)
+
+![](/docs/images/add_fps_15_85.gif)
+
+
+### Remove Actor
+
+Pick an actor in the scene to leave(click for preview)
+
+![](/docs/images/remove_fps_15_85.gif)
+
+
+### Swap Actors
+
+Pick two actors in the scene to switch positions(click for preview)
+
+![](/docs/images/swap_fps_15_85.gif)
+
+The scene restarts seamlessly with the updated actor lineup.
 
 ### Notes
 
