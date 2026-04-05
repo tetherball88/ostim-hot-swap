@@ -37,8 +37,9 @@ namespace HotSwap::Papyrus::ActorManagement {
             static_cast<uint32_t>(threadID),
             static_cast<uint32_t>(posA),
             static_cast<uint32_t>(posB),
-            g_ostimAPI);
-        SKSE::log::debug("SwapActors: returned {}", result);
+            g_ostimAPI,
+            [](int32_t newID, void*) { SKSE::log::debug("SwapActors: migration complete, newThreadID={}", newID); });
+        SKSE::log::debug("SwapActors: scheduled={}", result);
         return result;
     }
 
@@ -58,8 +59,9 @@ namespace HotSwap::Papyrus::ActorManagement {
         if (!g_ostimAPI) { SKSE::log::error("AddActorToThread: OStim API not available"); return -1; }
         SKSE::log::debug("AddActorToThread: threadID={} actor={:X}", threadID, actor ? actor->GetFormID() : 0);
         int result = HotSwap::ActorManagement::addActorToThread(
-            static_cast<uint32_t>(threadID), actor, g_ostimAPI);
-        SKSE::log::debug("AddActorToThread: returned {}", result);
+            static_cast<uint32_t>(threadID), actor, g_ostimAPI,
+            [](int32_t newID, void*) { SKSE::log::debug("AddActorToThread: migration complete, newThreadID={}", newID); });
+        SKSE::log::debug("AddActorToThread: scheduled={}", result);
         return result;
     }
 
@@ -74,8 +76,9 @@ namespace HotSwap::Papyrus::ActorManagement {
         int result = HotSwap::ActorManagement::removeActorFromThread(
             static_cast<uint32_t>(threadID),
             static_cast<uint32_t>(position),
-            g_ostimAPI);
-        SKSE::log::debug("RemoveActorFromThread: returned {}", result);
+            g_ostimAPI,
+            [](int32_t newID, void*) { SKSE::log::debug("RemoveActorFromThread: migration complete, newThreadID={}", newID); });
+        SKSE::log::debug("RemoveActorFromThread: scheduled={}", result);
         return result;
     }
 
@@ -85,7 +88,7 @@ namespace HotSwap::Papyrus::ActorManagement {
     }
 
     // Replace the thread's actor set with the given ordered actor array.
-    // Blocks until migration completes; returns new thread ID or -1 on failure.
+    // Returns 0 if scheduled, -1 on immediate failure. Migration completes asynchronously.
     int MigrateThread(RE::StaticFunctionTag*, int threadID, std::vector<RE::Actor*> actors) {
         if (!g_ostimAPI || actors.empty()) {
             SKSE::log::error("MigrateThread: OStim API not available or empty actor list");
@@ -102,8 +105,10 @@ namespace HotSwap::Papyrus::ActorManagement {
             ids[count++] = actor->GetFormID();
         }
         int startDelayMs = HotSwap::Settings::GetSingleton()->GetMigrationDelayMs();
-        int result = g_ostimAPI->MigrateThread(static_cast<uint32_t>(threadID), ids, count, nullptr, nullptr, startDelayMs);
-        SKSE::log::debug("MigrateThread: returned {}", result);
+        int result = g_ostimAPI->MigrateThread(static_cast<uint32_t>(threadID), ids, count,
+            [](int32_t newID, void*) { SKSE::log::debug("MigrateThread: migration complete, newThreadID={}", newID); },
+            nullptr, startDelayMs);
+        SKSE::log::debug("MigrateThread: scheduled={}", result);
         return result;
     }
 

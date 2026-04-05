@@ -37,6 +37,10 @@ Pick two actors in the scene to switch positions(click for preview)
 
 The scene restarts seamlessly with the updated actor lineup.
 
+### Scene Join
+
+If you are not currently in a scene, aim your crosshair at an NPC who **is** in an active scene and press the **OStim scene-start key**. A prompt will appear asking if you want to join their scene. Selecting **Yes** adds you to that scene.
+
 ### Notes
 
 - Only actors physically nearby can be added.
@@ -66,23 +70,23 @@ bool Function CanSwapActors(int threadID, int posA, int posB) native global
 
 ### Action Functions
 
-These perform the actual operation and return the **new thread ID** on success, or `-1` on failure.
+These schedule the operation asynchronously. They return `0` if successfully scheduled, or `-1` on immediate failure. The thread migration completes in the background.
 
 ```papyrus
-; Adds an actor to the thread.
+; Adds an actor to the thread. Returns 0 if scheduled, -1 on failure.
 int Function AddActorToThread(int threadID, Actor actor) native global
 
-; Removes the actor at the given position from the thread.
+; Removes the actor at the given position from the thread. Returns 0 if scheduled, -1 on failure.
 int Function RemoveActorFromThread(int threadID, int position) native global
 
-; Swaps the actors at posA and posB.
+; Swaps the actors at posA and posB. Returns 0 if scheduled, -1 on failure.
 int Function SwapActors(int threadID, int posA, int posB) native global
 
-; Replaces the entire actor lineup with a new ordered array.
+; Replaces the entire actor lineup with a new ordered array. Returns 0 if scheduled, -1 on immediate failure.
 int Function MigrateThread(int threadID, Actor[] actors) native global
 ```
 
-> **Important:** The thread ID changes after every successful operation. Always use the returned ID for subsequent calls.
+> **Important:** The thread ID changes after every successful operation. Since operations are now asynchronous, the new thread ID is **not** returned directly. Use `OActor.GetThreadID()` after the migration completes to retrieve the updated thread ID.
 
 ### Helper Functions
 
@@ -116,10 +120,9 @@ int threadID = myCurrentThreadID
 
 ; Add an actor if allowed
 if CanAddActor(threadID, someActor)
-    int newID = AddActorToThread(threadID, someActor)
-    if newID != -1
-        myCurrentThreadID = newID  ; update your stored ID
-    endif
+    int result = AddActorToThread(threadID, someActor)
+    ; result == 0 means migration was scheduled successfully
+    ; poll OActor.GetThreadID() after a short delay to get the new thread ID
 endif
 ```
 
